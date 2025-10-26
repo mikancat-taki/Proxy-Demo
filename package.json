@@ -14,18 +14,19 @@
   "engines": {
     "node": ">=22.0.0"
   },
-  "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "compression": "^1.7.4",
-    "pino": "^9.3.0",
-    "pino-http": "^9.3.0",
-    "node-fetch": "^3.4.0",
-    "jsdom": "^22.1.0",
-    "ioredis": "^5.3.1",
-    "rate-limit-redis": "^2.0.0",
-    "ws": "^8.15.0",
-    "mime-types": "^2.1.43"
+"dependencies": {
+  "express": "^4.18.2",
+  "cors": "^2.8.5",
+  "compression": "^1.7.4",
+  "pino": "^8.16.0",
+  "pino-http": "^8.4.0",
+  "node-fetch": "^3.4.0",
+  "jsdom": "^22.1.0",
+  "ioredis": "^5.3.1",
+  "rate-limit-redis": "^2.0.0",
+  "ws": "^8.15.0",
+  "mime-types": "^2.1.43"
+}
   },
   "devDependencies": {
     "typescript": "^5.2.2",
