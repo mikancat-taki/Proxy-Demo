@@ -24,9 +24,7 @@ app.use('/proxy/:url', (req, res, next) => {
   createProxyMiddleware({
     target: targetUrl,
     changeOrigin: true,
-    ws: true,
-    onProxyReq: (proxyReq, req, res) => {},
-    onProxyRes: (proxyRes, req, res) => {}
+    ws: true
   })(req, res, next);
 });
 
@@ -36,6 +34,7 @@ app.post('/run', (req, res) => {
   if (!lang || !code) return res.status(400).json({ error: 'lang or code missing' });
 
   let cmd;
+
   switch(lang.toLowerCase()) {
     case 'python':
       cmd = `python3 -c "${code.replace(/"/g, '\\"')}"`;
@@ -47,6 +46,18 @@ app.post('/run', (req, res) => {
       cmd = `go run - <<EOF
 ${code}
 EOF`;
+      break;
+    case 'c':
+      cmd = `echo "${code}" > temp.c && gcc temp.c -o temp && ./temp`;
+      break;
+    case 'cpp':
+      cmd = `echo "${code}" > temp.cpp && g++ temp.cpp -o temp && ./temp`;
+      break;
+    case 'csharp':
+      cmd = `echo "${code}" > temp.cs && mcs temp.cs -out:temp.exe && mono temp.exe`;
+      break;
+    case 'java':
+      cmd = `echo "${code}" > Main.java && javac Main.java && java Main`;
       break;
     default:
       return res.status(400).json({ error: 'unsupported language' });
