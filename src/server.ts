@@ -337,3 +337,27 @@ function CLIENT_SIDE_PATCH_SCRIPT(origOrigin: string): string {
 })();
 `;
 }
+// inside /proxy handler, before fetch
+const rangeHeader = req.headers['range'];
+const fetchOptions: RequestInit = {
+  method: "GET",
+  headers: {
+    "User-Agent": req.get("User-Agent") || "",
+    "Accept": req.get("Accept") || "*/*",
+    ...(rangeHeader ? { "Range": rangeHeader as string } : {})
+  },
+  redirect: "follow"
+};
+const upstream = await fetch(target.toString(), fetchOptions);
+
+// copy status, headers as before
+// if upstream.headers.get("Accept-Ranges") or range was requested
+if (rangeHeader && upstream.status === 206) {
+  // partial content
+  res.setHeader("Accept-Ranges", upstream.headers.get("Accept-Ranges") || "bytes");
+  res.setHeader("Content-Range", upstream.headers.get("Content-Range") || "");
+  res.status(206);
+} else {
+  res.status(upstream.status);
+}
+// then proceed to send buffer or text
