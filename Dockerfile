@@ -1,8 +1,10 @@
-FROM node:20-alpine
+FROM node:22-alpine
+
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --production
+RUN npm ci --only=production
 COPY . .
 RUN npm run build
-ENV NODE_ENV=production
-CMD ["node","dist/server.js"]
+
+EXPOSE 3000
+CMD ["node", "dist/index.js"]
