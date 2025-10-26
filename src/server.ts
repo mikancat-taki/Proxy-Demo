@@ -361,3 +361,15 @@ if (rangeHeader && upstream.status === 206) {
   res.status(upstream.status);
 }
 // then proceed to send buffer or text
+import { createApp } from "./app";
+import http from "http";
+
+const app = createApp();
+const port = process.env.PORT || 8080;
+const server = http.createServer(app);
+
+server.listen(port, () => {
+  console.log(`🚀 Proxy server running on port ${port}`);
+});
+
+export default server;
