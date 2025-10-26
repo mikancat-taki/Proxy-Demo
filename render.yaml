@@ -1,44 +1,11 @@
-# render.yaml
 services:
   - type: web
     name: proxy-demo-web
     env: node
-    region: oregon      # 必要に応じて region を設定
-    branch: main
     buildCommand: "npm install && npm run build"
-    startCommand: "npm run start"
-    plan: free          # プランに応じて変更
+    startCommand: "node dist/server.js"
+    plan: free
+    autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
-      - key: REDIS_HOST
-        value: redis.internal       # Render 内部 Redis を使う場合
-      - key: REDIS_PORT
-        value: "6379"
-      - key: PROXY_USER
-        fromSecret: PROXY_USER_SECRET
-      - key: PROXY_PASS
-        fromSecret: PROXY_PASS_SECRET
-      - key: PROXY_TOKEN
-        fromSecret: PROXY_TOKEN_SECRET
-      - key: RATE_LIMIT_MAX
-        value: "100"
-    diskSizeGb: 1                     # 必要に応じて変更
-    autoDeploy: true
-
-  - type: redis
-    name: proxy-demo-redis
-    plan: starter
-
-  # Optional: background worker / cron jobs
-  # - type: worker
-  #   name: proxy-demo-worker
-  #   env: node
-  #   buildCommand: "npm install && npm run build"
-  #   startCommand: "npm run worker"
-
-missions:
-  - name: metrics-exporter
-    type: cron
-    schedule: "0 */5 * * *"        # every 5 minutes
-    command: "node dist/scripts/exportMetrics.js"
