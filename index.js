@@ -1,42 +1,69 @@
 const express = require('express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
-const cors = require('cors');
-const url = require('url');
-
+const bodyParser = require('body-parser');
+const { WebSocketServer } = require('ws');
+const { exec } = require('child_process');
 const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(express.static('public')); // フロントUI
+const port = process.env.PORT || 3000;
+
+// JSON パース
+app.use(bodyParser.json());
 
 // DuckDuckGo検索
 app.get('/search', (req, res) => {
-  const q = req.query.q || '';
-  res.redirect(`https://duckduckgo.com/?q=${encodeURIComponent(q)}`);
+  const query = encodeURIComponent(req.query.q || '');
+  res.redirect(`https://duckduckgo.com/?q=${query}`);
 });
 
-// 動的プロキシ
-app.use('/proxy', createProxyMiddleware({
-  target: 'https://example.com', // デフォルトターゲット
-  changeOrigin: true,
-  ws: true, // WebSocket対応
-  pathRewrite: (path, req) => {
-    const parts = path.split('/');
-    parts.shift(); // ''
-    parts.shift(); // 'proxy'
-    const targetUrl = decodeURIComponent(parts.join('/'));
-    const parsed = url.parse(targetUrl);
-    return parsed.path || '/';
-  },
-  onProxyReq: (proxyReq, req, res) => {
-    proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
-  },
-  onProxyRes: (proxyRes, req, res) => {
-    // 必要に応じてCookie書き換え
-  },
-}));
-
-// サーバー起動
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Proxy server running on port ${port}`);
+// HTTP/HTTPSプロキシ
+app.use('/proxy/:url', (req, res, next) => {
+  const targetUrl = Buffer.from(req.params.url, 'base64').toString('utf8');
+  createProxyMiddleware({
+    target: targetUrl,
+    changeOrigin: true,
+    ws: true,
+    onProxyReq: (proxyReq, req, res) => {
+      // 必要ならヘッダー書き換え
+    }
+  })(req, res, next);
 });
+
+// コード実行
+app.post('/run', (req, res) => {
+  const { lang, code } = req.body;
+  if (!lang || !code) return res.status(400).json({ error: 'lang or code missing' });
+
+  let cmd;
+  switch(lang.toLowerCase()) {
+    case 'python':
+      cmd = `python3 -c "${code.replace(/"/g, '\\"')}"`;
+      break;
+    case 'javascript':
+      cmd = `node -e "${code.replace(/"/g, '\\"')}"`;
+      break;
+    case 'go':
+      cmd = `go run - <<EOF
+${code}
+EOF`;
+      break;
+    default:
+      return res.status(400).json({ error: 'unsupported language' });
+  }
+
+  exec(cmd, { timeout: 5000 }, (error, stdout, stderr) => {
+    if (error) return res.json({ error: stderr || error.message });
+    res.json({ output: stdout });
+  });
+});
+
+// WebSocket
+const server = app.listen(port, () => console.log(`Server running on port ${port}`));
+const wss = new WebSocketServer({ server, path: '/ws' });
+
+wss.on('connection', (ws) => {
+  ws.on('message', (msg) => {
+    // 受信したメッセージをそのまま返す（デモ）
+    ws.send(`Server received: ${msg}`);
+  });
+});
+
