@@ -17,4 +17,18 @@
     "typescript": "^5.2.2",
     "ts-node-dev": "^2.0.0"
   }
+  {
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "outDir": "dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "moduleResolution": "node",
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src"]
+}
+
 }
