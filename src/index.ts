@@ -1,30 +1,37 @@
-import express from "express";
-import { createProxyMiddleware } from "http-proxy-middleware";
+import express, { Request, Response } from "express";
 import cors from "cors";
-import rateLimit from "express-rate-limit";
-
-import { corsOptions } from "./middlewares/cors";
-import { limiter } from "./middlewares/rateLimit";
+import { createProxyMiddleware } from "http-proxy-middleware";
+import compression from "compression";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ミドルウェア
-app.use(cors(corsOptions));
-app.use(limiter);
+app.use(cors());
+app.use(compression());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// プロキシルート
-app.use("/api", createProxyMiddleware({
-  target: "https://example.com", // 変更可能
-  changeOrigin: true,
-  pathRewrite: { "^/api": "" }
-}));
-
-app.get("/", (_req, res) => {
+// テスト用ルート
+app.get("/", (_req: Request, res: Response) => {
   res.send("Proxy server is running!");
 });
 
+// プロキシ設定例
+app.use(
+  "/api",
+  createProxyMiddleware({
+    target: "https://example.com", // 実際にプロキシしたいURLに変更
+    changeOrigin: true,
+    pathRewrite: {
+      "^/api": "",
+    },
+  })
+);
+
+// サーバー起動
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+export default app;
