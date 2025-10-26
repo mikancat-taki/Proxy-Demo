@@ -3,10 +3,13 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 const bodyParser = require('body-parser');
 const { WebSocketServer } = require('ws');
 const { exec } = require('child_process');
+const path = require('path');
+
 const app = express();
 const port = process.env.PORT || 3000;
 
-// JSON パース
+// 静的ファイル
+app.use(express.static(path.join(__dirname, '../client')));
 app.use(bodyParser.json());
 
 // DuckDuckGo検索
@@ -15,16 +18,15 @@ app.get('/search', (req, res) => {
   res.redirect(`https://duckduckgo.com/?q=${query}`);
 });
 
-// HTTP/HTTPSプロキシ
+// プロキシ
 app.use('/proxy/:url', (req, res, next) => {
   const targetUrl = Buffer.from(req.params.url, 'base64').toString('utf8');
   createProxyMiddleware({
     target: targetUrl,
     changeOrigin: true,
     ws: true,
-    onProxyReq: (proxyReq, req, res) => {
-      // 必要ならヘッダー書き換え
-    }
+    onProxyReq: (proxyReq, req, res) => {},
+    onProxyRes: (proxyRes, req, res) => {}
   })(req, res, next);
 });
 
@@ -61,9 +63,5 @@ const server = app.listen(port, () => console.log(`Server running on port ${port
 const wss = new WebSocketServer({ server, path: '/ws' });
 
 wss.on('connection', (ws) => {
-  ws.on('message', (msg) => {
-    // 受信したメッセージをそのまま返す（デモ）
-    ws.send(`Server received: ${msg}`);
-  });
+  ws.on('message', (msg) => ws.send(`Server received: ${msg}`));
 });
-
