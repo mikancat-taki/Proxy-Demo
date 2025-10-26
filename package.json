@@ -1,7 +1,7 @@
 {
   "name": "proxy-demo",
   "version": "1.0.0",
-  "description": "完全版 Web プロキシサーバー",
+  "description": "Node.jsプロキシサーバー",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc --outDir dist",
@@ -9,30 +9,34 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts"
   },
   "engines": {
-  "node": "22.x"
-}
+    "node": "22.x"
   },
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
     "compression": "^1.7.4",
-    "pino": "^8.21.0",
     "pino-http": "^11.0.0",
-    "node-fetch": "^2.6.7"
+    "node-fetch": "^2.6.7",
     "jsdom": "^22.1.0",
-    "ioredis": "^5.3.2",
+    "ioredis": "^5.3.1",
     "rate-limit-redis": "^1.7.0",
-    "uuid": "^9.0.0"
+    "lru-cache": "^10.1.1",
+    "prom-client": "^15.0.0",
+    "ws": "^8.14.0",
+    "mime-types": "^2.1.35"
   },
   "devDependencies": {
-    "@types/express": "^4.17.17",
-    "@types/node": "^20.4.2",
+    "@types/node": "^20.6.0",
+    "@types/express": "^4.17.21",
     "@types/cors": "^2.8.17",
     "@types/compression": "^1.7.2",
-    "@types/node-fetch": "^2.5.12",
+    "@types/ws": "^8.5.4",
+    "ts-node-dev": "^2.0.0",
     "typescript": "^5.2.2",
-    "ts-node": "^10.9.1",
-    "ts-node-dev": "^2.0.0"
+    "@types/node-fetch": "^2.6.4",
+    "@types/jsdom": "^22.2.0",
+    "@types/pino-http": "^6.0.1",
+    "@types/ioredis": "^4.28.11"
   },
   "license": "MIT"
 }
