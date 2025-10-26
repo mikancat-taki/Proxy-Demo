@@ -1,0 +1,19 @@
+import Redis from "ioredis";
+const redis = new Redis({ host: process.env.REDIS_HOST || "127.0.0.1", port: Number(process.env.REDIS_PORT || 6379) });
+
+// in /proxy handler, for GET requests of static types (css, js, image)
+const cacheKey = `cache:${target.toString()}`;
+if (somethingStatic) {
+  const cached = await redis.getBuffer(cacheKey);
+  if (cached) {
+    res.setHeader("X-Cache", "HIT");
+    return res.send(cached);
+  }
+}
+
+// after fetching and preparing buf
+if (somethingStatic) {
+  await redis.set(cacheKey, buf, "EX", 60*60); // e.g., cache 1 hour
+  res.setHeader("X-Cache", "MISS");
+}
+res.send(buf);
