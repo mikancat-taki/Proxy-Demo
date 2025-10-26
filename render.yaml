@@ -1,11 +1,13 @@
 services:
   - type: web
-    name: proxy-demo-web
+    name: proxy-demo
     env: node
-    buildCommand: "npm install && npm run build"
-    startCommand: "node dist/server.js"
     plan: free
-    autoDeploy: true
+    region: singapore
+    buildCommand: "yarn install && yarn build"
+    startCommand: "yarn start"
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 10000
