@@ -1,111 +1,150 @@
 // src/server.ts
 import express from "express";
-import fetch, { RequestInit, Response as FetchResponse } from "node-fetch";
+import http from "http";
+import httpProxy from "http-proxy";
+import fetch from "node-fetch";
 import { JSDOM } from "jsdom";
 import path from "path";
 import mime from "mime-types";
 import { URL } from "url";
 
 const app = express();
-const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
+const PORT = Number(process.env.PORT || 8080);
 
-app.use(express.static(path.join(process.cwd(), "public")));
+// Basic auth env vars
+const PROXY_USER = process.env.PROXY_USER || "";
+const PROXY_PASS = process.env.PROXY_PASS || "";
+const PROXY_TOKEN = process.env.PROXY_TOKEN || ""; // optional token
 
-// helper: is a content-type HTML?
-function isHtmlContentType(ct?: string | null): boolean {
+// create http server (needed for websocket upgrade)
+const server = http.createServer(app);
+
+// http-proxy instance for WS proxying and generic proxies
+const proxy = httpProxy.createProxyServer({
+  changeOrigin: true,
+  secure: true,
+  ws: true
+});
+
+// helpers
+function isHtmlContentType(ct?: string | null) {
   if (!ct) return false;
   return ct.includes("text/html");
 }
 
-// sanitize and validate target URL
+function isCssContentType(ct?: string | null) {
+  if (!ct) return false;
+  return ct.includes("text/css");
+}
+
 function getTargetUrl(raw?: string): URL | null {
   if (!raw) return null;
   try {
-    // ensure protocol present
-    const url = new URL(raw);
-    if (!["http:", "https:"].includes(url.protocol)) return null;
-    return url;
+    const u = new URL(raw);
+    if (!["http:", "https:", "ws:", "wss:"].includes(u.protocol)) return null;
+    return u;
   } catch {
-    // try add https if missing
     try {
-      const url = new URL("https://" + raw);
-      return url;
+      // attempt https
+      return new URL("https://" + raw);
     } catch {
       return null;
     }
   }
 }
 
-// main proxy endpoint
-app.get("/proxy", async (req, res) => {
+// Basic auth middleware (also supports token header)
+function authMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if ((PROXY_USER && PROXY_PASS) || PROXY_TOKEN) {
+    // token check first
+    if (PROXY_TOKEN) {
+      const t = req.get("x-proxy-token");
+      if (t && t === PROXY_TOKEN) return next();
+    }
+    // Basic auth
+    const auth = req.get("authorization") || "";
+    if (!auth.startsWith("Basic ")) {
+      res.setHeader("WWW-Authenticate", 'Basic realm="Interstellar-Lite"');
+      res.status(401).send("Authentication required");
+      return;
+    }
+    const base = auth.slice("Basic ".length);
+    const decoded = Buffer.from(base, "base64").toString("utf-8");
+    const [user, pass] = decoded.split(":");
+    if (user === PROXY_USER && pass === PROXY_PASS) {
+      return next();
+    } else {
+      res.setHeader("WWW-Authenticate", 'Basic realm="Interstellar-Lite"');
+      res.status(401).send("Invalid credentials");
+      return;
+    }
+  } else {
+    // no auth configured
+    return next();
+  }
+}
+
+// serve front-end
+app.use(express.static(path.join(process.cwd(), "public")));
+
+// Main HTTP proxy endpoint
+app.get("/proxy", authMiddleware, async (req, res) => {
   const raw = (req.query.url as string) || "";
   const target = getTargetUrl(raw);
   if (!target) {
-    res.status(400).send("Missing or invalid 'url' query parameter.");
+    res.status(400).send("Missing or invalid 'url' query param.");
     return;
   }
 
-  // build headers to forward user-agent & accept to better mimic browser
-  const forwardHeaders: Record<string,string> = {
-    "User-Agent": req.get("User-Agent") || "Interstellar-Lite/1.0",
-    "Accept": req.get("Accept") || "*/*"
-  };
-
-  const fetchOptions: RequestInit = {
-    method: "GET",
-    headers: forwardHeaders,
-    redirect: "follow"
-  };
-
   try {
-    const upstream: FetchResponse = await fetch(target.toString(), fetchOptions);
+    // forward user-agent & accept
+    const upstream = await fetch(target.toString(), {
+      headers: {
+        "User-Agent": req.get("User-Agent") || "Interstellar-Lite/1.0",
+        "Accept": req.get("Accept") || "*/*"
+      },
+      redirect: "follow"
+    });
 
-    // copy status code
+    // copy status
     res.status(upstream.status);
 
-    // copy headers except hop-by-hop ones
-    upstream.headers.forEach((value, key) => {
-      // skip hop-by-hop headers
-      const hopByHop = [
-        "connection","keep-alive","proxy-authenticate","proxy-authorization",
-        "te","trailers","transfer-encoding","upgrade"
-      ];
-      if (!hopByHop.includes(key.toLowerCase())) {
-        res.setHeader(key, value);
-      }
+    // copy headers except hop-by-hop
+    upstream.headers.forEach((v, k) => {
+      const hop = ["connection","keep-alive","proxy-authenticate","proxy-authorization","te","trailers","transfer-encoding","upgrade"];
+      if (!hop.includes(k.toLowerCase())) res.setHeader(k, v);
     });
 
     const contentType = upstream.headers.get("content-type");
 
+    // HTML handling (rewrite links & inject client patch)
     if (isHtmlContentType(contentType)) {
       const body = await upstream.text();
-      // Parse HTML and rewrite resource URLs to point back to /proxy?url=...
       const dom = new JSDOM(body, { url: target.toString() });
       const document = dom.window.document;
 
-      // inject a <base> pointing to the proxied site origin to help relative links
-      const baseEl = document.querySelector("base") ?? document.createElement("base");
-      baseEl.setAttribute("href", target.origin + "/");
-      if (!baseEl.parentElement) {
+      // ensure <base> exists pointing to proxied origin (helps relative paths)
+      let baseEl = document.querySelector("base");
+      if (!baseEl) {
+        baseEl = document.createElement("base");
         const head = document.querySelector("head");
         if (head) head.prepend(baseEl);
       }
+      baseEl.setAttribute("href", target.origin + "/");
 
-      // function to rewrite URLs for attributes that load resources / navigation
+      // rewrite attributes (common)
       function rewriteAttr(selector: string, attr: string) {
-        document.querySelectorAll(selector).forEach((el: Element) => {
-          const v = (el as any).getAttribute(attr);
+        document.querySelectorAll(selector).forEach((el) => {
+          const v = (el as Element).getAttribute(attr);
           if (!v) return;
           try {
             const resolved = new URL(v, target).toString();
-            (el as any).setAttribute(attr, `/proxy?url=${encodeURIComponent(resolved)}`);
-          } catch {
-            // ignore
-          }
+            (el as Element).setAttribute(attr, `/proxy?url=${encodeURIComponent(resolved)}`);
+          } catch (e) { /* ignore */ }
         });
       }
 
-      // rewrite common attributes
+      // rewrite common
       rewriteAttr("a", "href");
       rewriteAttr("link", "href");
       rewriteAttr("img", "src");
@@ -116,19 +155,32 @@ app.get("/proxy", async (req, res) => {
       rewriteAttr("audio", "src");
       rewriteAttr("form", "action");
 
-      // small convenience: add a header bar to allow returning to our UI (optional)
-      const topBar = document.createElement("div");
-      topBar.innerHTML = `
-        <div style="position:fixed;left:0;right:0;top:0;height:44px;background:rgba(0,0,0,0.6);color:#fff;z-index:9999;display:flex;align-items:center;padding:0 12px;font-family:Arial,Helvetica,sans-serif">
-          <a href="/" style="color:#fff;text-decoration:none;margin-right:12px;">← Back</a>
-          <div style="font-size:13px;opacity:0.9">Proxied: ${target.hostname}</div>
-        </div>
-      `;
-      const bodyEl = document.querySelector("body");
-      if (bodyEl) {
-        bodyEl.style.paddingTop = "48px";
-        bodyEl.prepend(topBar);
-      }
+      // meta refresh rewrite (<meta http-equiv="refresh" content="5; URL=/...">)
+      document.querySelectorAll('meta[http-equiv]').forEach((m) => {
+        const he = m.getAttribute("http-equiv")?.toLowerCase();
+        if (he === "refresh") {
+          const content = m.getAttribute("content") || "";
+          // parse "5; url=...".
+          const parts = content.split(";");
+          if (parts.length > 1) {
+            const urlPart = parts.slice(1).join(";").trim();
+            const match = urlPart.match(/url=(.*)/i);
+            if (match) {
+              const rawUrl = match[1].replace(/^['"]|['"]$/g, "");
+              try {
+                const resolved = new URL(rawUrl, target).toString();
+                m.setAttribute("content", `${parts[0]}; url=/proxy?url=${encodeURIComponent(resolved)}`);
+              } catch {}
+            }
+          }
+        }
+      });
+
+      // inject client-side proxy patch for fetch/XHR/WebSocket
+      const patchScript = document.createElement("script");
+      patchScript.setAttribute("nonce", "interstellar-patch");
+      patchScript.textContent = CLIENT_SIDE_PATCH_SCRIPT(target.origin);
+      document.documentElement.prepend(patchScript);
 
       const out = dom.serialize();
       res.setHeader("content-type", "text/html; charset=utf-8");
@@ -136,25 +188,152 @@ app.get("/proxy", async (req, res) => {
       return;
     }
 
-    // Non-HTML (images, css, scripts, etc.) -> stream raw bytes
-    const buffer = await upstream.arrayBuffer();
-    const buf = Buffer.from(buffer);
-    // set fallback content-type if upstream didn't provide one
+    // CSS handling: rewrite url(...) occurrences to pass through /proxy
+    if (isCssContentType(contentType)) {
+      const cssText = await upstream.text();
+      // naive replacement for url(...) that are not data: URLs
+      const rewritten = cssText.replace(/url\(([^)]+)\)/gi, (m, g1) => {
+        let urlStr = g1.trim().replace(/^['"]|['"]$/g, "");
+        if (/^data:/i.test(urlStr)) return `url(${urlStr})`;
+        try {
+          const resolved = new URL(urlStr, target).toString();
+          return `url(/proxy?url=${encodeURIComponent(resolved)})`;
+        } catch {
+          return `url(${urlStr})`;
+        }
+      });
+      res.setHeader("content-type", "text/css; charset=utf-8");
+      res.send(rewritten);
+      return;
+    }
+
+    // others -> stream bytes
+    const buf = Buffer.from(await upstream.arrayBuffer());
     const ct = contentType || mime.lookup(target.pathname) || "application/octet-stream";
     res.setHeader("content-type", ct);
     res.send(buf);
-  } catch (err: any) {
-    console.error("Proxy error:", err);
-    res.status(502).send("Bad Gateway (fetch failed).");
+  } catch (err) {
+    console.error("proxy error:", err);
+    res.status(502).send("Bad Gateway");
   }
 });
 
-// simple health route
-app.get("/health", (req, res) => {
-  res.json({ ok: true, timestamp: Date.now() });
+// WebSocket proxying endpoint
+// Clients should connect to ws://yourserver/ws?url=<ws://target> OR the injected client patch rewrites WebSocket to this.
+app.get("/ws", authMiddleware, (req, res) => {
+  res.status(400).send("This endpoint only supports WebSocket upgrades.");
 });
 
-// start
-app.listen(PORT, () => {
-  console.log(`Interstellar-lite proxy running at http://localhost:${PORT}`);
+// handle upgrades for /ws?url=...
+server.on("upgrade", (req, socket, head) => {
+  // parse url path & query
+  const parsed = new URL(req.url || "", `http://${req.headers.host}`);
+  if (parsed.pathname !== "/ws") {
+    socket.destroy();
+    return;
+  }
+  const raw = parsed.searchParams.get("url") || "";
+  const target = getTargetUrl(raw);
+  if (!target) {
+    socket.write("HTTP/1.1 400 Bad Request\r\n\r\n");
+    socket.destroy();
+    return;
+  }
+
+  // authentication: this is a raw upgrade, so implement simple token/basic check via headers
+  if ((PROXY_USER && PROXY_PASS) || PROXY_TOKEN) {
+    let allowed = false;
+    // token header
+    const token = req.headers["x-proxy-token"];
+    if (PROXY_TOKEN && token === PROXY_TOKEN) allowed = true;
+    // Basic auth header
+    const auth = (req.headers["authorization"] as string) || "";
+    if (!allowed && auth.startsWith("Basic ")) {
+      const decoded = Buffer.from(auth.slice(6), "base64").toString("utf-8");
+      const [u, p] = decoded.split(":");
+      if (u === PROXY_USER && p === PROXY_PASS) allowed = true;
+    }
+    if (!allowed) {
+      socket.write("HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"Interstellar-Lite\"\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+  }
+
+  // use http-proxy to proxy WS
+  // note: target must be ws:// or wss://; http-proxy will upgrade accordingly
+  proxy.ws(req, socket as any, head, { target: target.origin });
 });
+
+// Basic health
+app.get("/health", (req, res) => res.json({ ok: true, ts: Date.now() }));
+
+// generic error handler
+proxy.on("error", (err) => {
+  console.error("proxy error:", err);
+});
+
+// start server
+server.listen(PORT, () => {
+  console.log(`Proxy server running on http://localhost:${PORT}`);
+});
+
+// ---------- Client-side patch script factory ----------
+// Injected into proxied HTML to rewrite fetch/XHR/WebSocket at runtime to go through our /proxy and /ws endpoints.
+// Note: this is a best-effort patch; sites with strict CSP or heavy obfuscation might still fail.
+function CLIENT_SIDE_PATCH_SCRIPT(origOrigin: string): string {
+  // Using template string to produce a compact script
+  return `
+(function(){
+  try {
+    const encode = (u)=>'/proxy?url='+encodeURIComponent(new URL(u, location.href).toString());
+    // patch fetch
+    const _fetch = window.fetch;
+    window.fetch = function(input, init){
+      try{
+        const url = (typeof input === 'string')? input : input instanceof Request ? input.url : '';
+        if(url && !url.startsWith('/proxy') && !url.startsWith(location.origin)){
+          input = typeof input === 'string' ? encode(url) : new Request(encode(url), init || {});
+        }
+      }catch(e){}
+      return _fetch.call(this, input, init);
+    };
+    // patch XHR
+    const XHR = window.XMLHttpRequest;
+    function patchedOpen(method, url){
+      try{
+        if(url && !url.startsWith('/proxy') && !url.startsWith(location.origin)){
+          url = encode(url);
+        }
+      }catch(e){}
+      return XHR.prototype.open.call(this, method, url, ...Array.prototype.slice.call(arguments,3));
+    }
+    if(window.XMLHttpRequest){
+      const origOpen = XHR.prototype.open;
+      XHR.prototype.open = function(method, url){
+        try{
+          if(url && !url.startsWith('/proxy') && !url.startsWith(location.origin)){
+            url = encode(url);
+          }
+        }catch(e){}
+        return origOpen.apply(this, [method, url].concat(Array.prototype.slice.call(arguments,2)));
+      };
+    }
+    // patch WebSocket to connect via /ws?url=
+    const OrigWS = window.WebSocket;
+    window.WebSocket = function(url, protocols){
+      try{
+        if(typeof url === 'string' && !url.startsWith('/ws') && !url.startsWith(location.origin)){
+          const proxied = '/ws?url=' + encodeURIComponent(new URL(url, location.href).toString());
+          return new OrigWS.call(this, proxied, protocols);
+        }
+      }catch(e){}
+      return new OrigWS.call(this, url, protocols);
+    };
+    window.WebSocket.prototype = OrigWS.prototype;
+  }catch(e){
+    console.error('Client proxy patch error', e);
+  }
+})();
+`;
+}
