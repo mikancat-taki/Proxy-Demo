@@ -48,4 +48,14 @@
   "engines": {
     "node": ">=20.0.0"
   }
+  {
+  "scripts": {
+    "dev": "ts-node src/server.ts",
+    "build": "tsc --outDir dist",
+    "start": "npm run build && node dist/server.js",
+    "test": "jest",
+    "lint": "eslint . --ext .ts"
+  }
+}
+
 }
