@@ -1,36 +1,51 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = require("express");
-const cors_1 = require("cors");
-const http_proxy_middleware_1 = require("http-proxy-middleware");
-const compression_1 = require("compression");
+const express = require("express");
+const cors = require("cors");
+const compression = require("compression");
+const { createProxyMiddleware } = require("http-proxy-middleware");
+const WebSocket = require("ws");
+const fetch = require("node-fetch");
 
-const app = (0, express_1.default)();
+const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ミドルウェア
-app.use((0, cors_1.default)());
-app.use((0, compression_1.default)());
-app.use(express_1.default.json());
-app.use(express_1.default.urlencoded({ extended: true }));
+app.use(cors());
+app.use(compression());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // テスト用ルート
-app.get("/", (_req, res) => {
-    res.send("Proxy server is running!");
+app.get("/", (req, res) => {
+  res.send("Proxy server is running!");
 });
 
-// プロキシ設定例
-app.use("/api", (0, http_proxy_middleware_1.createProxyMiddleware)({
-    target: "https://example.com", // 実際にプロキシしたいURLに変更
-    changeOrigin: true,
-    pathRewrite: {
-        "^/api": "",
-    },
+// HTTP プロキシルート
+app.use("/api", createProxyMiddleware({
+  target: "https://example.com", // 実際にプロキシしたいURLに変更
+  changeOrigin: true,
+  pathRewrite: {
+    "^/api": "",
+  },
 }));
 
-// サーバー起動
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+// WebSocket サーバー
+const server = require("http").createServer(app);
+const wss = new WebSocket.Server({ server });
+
+wss.on("connection", (ws) => {
+  console.log("WebSocket client connected");
+
+  ws.on("message", (msg) => {
+    console.log("Received:", msg.toString());
+    ws.send(`Echo: ${msg}`);
+  });
+
+  ws.on("close", () => {
+    console.log("WebSocket client disconnected");
+  });
 });
 
-exports.default = app;
+// サーバー起動
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
