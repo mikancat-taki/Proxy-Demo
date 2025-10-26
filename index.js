@@ -1,51 +1,42 @@
-const express = require("express");
-const cors = require("cors");
-const compression = require("compression");
-const { createProxyMiddleware } = require("http-proxy-middleware");
-const WebSocket = require("ws");
-const fetch = require("node-fetch");
+const express = require('express');
+const { createProxyMiddleware } = require('http-proxy-middleware');
+const cors = require('cors');
+const url = require('url');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// ミドルウェア
 app.use(cors());
-app.use(compression());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.static('public')); // フロントUI
 
-// テスト用ルート
-app.get("/", (req, res) => {
-  res.send("Proxy server is running!");
+// DuckDuckGo 検索
+app.get('/search', (req, res) => {
+  const q = req.query.q || '';
+  res.redirect(`https://duckduckgo.com/?q=${encodeURIComponent(q)}`);
 });
 
-// HTTP プロキシルート
-app.use("/api", createProxyMiddleware({
-  target: "https://example.com", // 実際にプロキシしたいURLに変更
+// 動的プロキシ
+app.use('/proxy', createProxyMiddleware({
+  target: 'https://example.com', // デフォルトターゲット
   changeOrigin: true,
-  pathRewrite: {
-    "^/api": "",
+  ws: true, // WebSocket 対応
+  pathRewrite: (path, req) => {
+    // /proxy/<url> を元の URL に変換
+    const parts = path.split('/');
+    parts.shift(); // '' (最初の /)
+    parts.shift(); // 'proxy'
+    const targetUrl = decodeURIComponent(parts.join('/'));
+    return url.parse(targetUrl).path || '/';
+  },
+  onProxyReq: (proxyReq, req, res) => {
+    // 必要ならヘッダーを書き換え
+    proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    // Cookie 書き換え等必要ならここで
   },
 }));
 
-// WebSocket サーバー
-const server = require("http").createServer(app);
-const wss = new WebSocket.Server({ server });
-
-wss.on("connection", (ws) => {
-  console.log("WebSocket client connected");
-
-  ws.on("message", (msg) => {
-    console.log("Received:", msg.toString());
-    ws.send(`Echo: ${msg}`);
-  });
-
-  ws.on("close", () => {
-    console.log("WebSocket client disconnected");
-  });
-});
-
 // サーバー起動
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Proxy server running on
