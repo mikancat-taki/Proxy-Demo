@@ -1,3 +1,48 @@
-<!doctype html><html><head><meta charset="utf-8"><title>Blank</title></head><body>
-<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#666">Enter URL and press Go</div>
-</body></html>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Web Proxy</title>
+<style>
+  body { font-family: sans-serif; margin:0; padding:0; }
+  #bar { display:flex; padding:10px; background:#222; color:white; }
+  #url, #search { flex:1; margin-right:5px; padding:5px; }
+  iframe { width:100%; height:calc(100vh - 50px); border:none; }
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <input id="search" type="text" placeholder="DuckDuckGo検索">
+  <input id="url" type="text" placeholder="URLを入力">
+  <button id="go">Go</button>
+</div>
+
+<iframe id="frame" src=""></iframe>
+
+<script>
+const searchInput = document.getElementById('search');
+const urlInput = document.getElementById('url');
+const goBtn = document.getElementById('go');
+const frame = document.getElementById('frame');
+
+goBtn.addEventListener('click', () => {
+  if(urlInput.value) {
+    const encoded = encodeURIComponent(urlInput.value);
+    frame.src = '/proxy/' + encoded;
+  } else if(searchInput.value) {
+    frame.src = '/search?q=' + encodeURIComponent(searchInput.value);
+  }
+});
+
+searchInput.addEventListener('keydown', e => {
+  if(e.key === 'Enter') goBtn.click();
+});
+
+urlInput.addEventListener('keydown', e => {
+  if(e.key === 'Enter') goBtn.click();
+});
+</script>
+
+</body>
+</html>
