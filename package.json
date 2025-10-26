@@ -1,42 +1,20 @@
 {
   "name": "proxy-demo",
   "version": "1.0.0",
-  "description": "Node.jsプロキシサーバー",
-  "main": "dist/server.js",
+  "main": "dist/index.js",
   "scripts": {
-    "build": "tsc --outDir dist",
-    "start": "node dist/server.js",
-    "dev": "ts-node-dev --respawn --transpile-only src/server.ts"
-  },
-  "engines": {
-    "node": "22.x"
+    "start": "node dist/index.js",
+    "build": "tsc",
+    "dev": "ts-node-dev src/index.ts"
   },
   "dependencies": {
     "express": "^4.18.2",
+    "http-proxy-middleware": "^2.0.6",
     "cors": "^2.8.5",
-    "compression": "^1.7.4",
-    "pino-http": "^11.14.1",
-    "node-fetch": "^2.6.7",
-    "jsdom": "^22.1.0",
-    "ioredis": "^5.3.1",
-    "rate-limit-redis": "^1.7.0",
-    "lru-cache": "^10.1.1",
-    "prom-client": "^15.0.0",
-    "ws": "^8.14.0",
-    "mime-types": "^2.1.35"
+    "express-rate-limit": "^6.7.0"
   },
   "devDependencies": {
-    "@types/node": "^20.6.0",
-    "@types/express": "^4.17.21",
-    "@types/cors": "^2.8.17",
-    "@types/compression": "^1.7.2",
-    "@types/ws": "^8.5.4",
-    "ts-node-dev": "^2.0.0",
     "typescript": "^5.2.2",
-    "@types/node-fetch": "^2.6.4",
-    "@types/jsdom": "^21.1.4",
-    "@types/pino-http": "^6.0.1",
-    "@types/ioredis": "^4.28.11"
-  },
-  "license": "MIT"
+    "ts-node-dev": "^2.0.0"
+  }
 }
