@@ -1,26 +1,12 @@
-import express, { Request, Response } from "express";
-import fetch from "node-fetch";
-import { writeHead } from "node:http";
+import { Router, Request, Response } from 'express';
+import fetch from 'node-fetch';
 
-export function createProxyRouter() {
-  const router = express.Router();
+export const proxyRouter = Router();
 
-  router.get("/", async (req: Request, res: Response) => {
-    const target = req.query.url?.toString();
-    if (!target) return res.status(400).json({ error: "url parameter required" });
+proxyRouter.get('/', async (req: Request, res: Response) => {
+  const target = req.query.url as string;
+  if (!target) return res.status(400).send('url required');
 
-    const range = req.headers["range"];
-    const headers = { Range: range as string };
-
-    const response = await fetch(target, { headers });
-    res.status(response.status);
-
-    for (const [k, v] of response.headers.entries()) {
-      res.setHeader(k, v);
-    }
-
-    response.body.pipe(res);
-  });
-
-  return router;
-}
+  const response = await fetch(target);
+  response.body?.pipe(res);
+});
