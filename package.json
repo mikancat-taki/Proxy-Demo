@@ -20,4 +20,15 @@
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.5.6"
   }
+  "scripts": {
+  "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+  "build": "tsc",
+  "start": "node dist/server.js",
+  "test": "jest --runInBand",
+  "test:watch": "jest --watch",
+  "lint": "eslint . --ext .ts,.js",
+  "docker:build": "docker build -t interstellar-lite:latest .",
+  "k6:run": "k6 run k6/scripts/streaming-test.js"
+}
+
 }
