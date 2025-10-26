@@ -1,0 +1,31 @@
+version: "3.8"
+services:
+  proxy:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - PROXY_USER=${PROXY_USER}
+      - PROXY_PASS=${PROXY_PASS}
+      - PROXY_TOKEN=${PROXY_TOKEN}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RATE_LIMIT_MAX=100
+    depends_on:
+      - redis
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+  nginx:
+    image: nginx:stable-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+      - certs:/etc/letsencrypt
+    depends_on:
+      - proxy
+volumes:
+  certs:
