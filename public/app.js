@@ -8,14 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     let val = input.value.trim();
     if (!val) return;
-    // if protocol missing, add https
-    if (!/^https?:\/\//i.test(val)) val = "https://" + val;
-    const proxyUrl = `/proxy?url=${encodeURIComponent(val)}`;
-    viewer.src = proxyUrl;
-  });
-
-  // convenience: enter example
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") form.dispatchEvent(new Event("submit"));
+    if (!/^https?:\/\//i.test(val) && !/^http:\/\//i.test(val)) val = "https://" + val;
+    viewer.src = `/proxy?url=${encodeURIComponent(val)}`;
   });
 });
