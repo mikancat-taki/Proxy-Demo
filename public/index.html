@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Interstellar-style Proxy + IDE</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="top-bar">
+    <input type="text" id="url-bar" placeholder="URL or search" />
+    <button id="go-btn">Go</button>
+  </div>
+  <iframe id="webview" src="" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+  <div id="editor">
+    <select id="lang-select">
+      <option value="javascript">JavaScript</option>
+      <option value="python">Python</option>
+      <option value="go">Go</option>
+    </select>
+    <textarea id="code-area" placeholder="Write code here..."></textarea>
+    <button id="run-btn">Run</button>
+    <pre id="output"></pre>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
