@@ -1,40 +1,26 @@
 import express, { Express } from 'express';
 import cors from 'cors';
-import rateLimit from 'express-rate-limit';
-import RedisStore from 'rate-limit-redis';
-import { createClient } from 'redis';
 import helmet from 'helmet';
 import compression from 'compression';
 import pinoHttp from 'pino-http';
-import { proxyRouter } from './routes/proxy';
-import { setupPrometheus } from './middleware/prometheus';
+import { proxyRouter, setupWebSocket } from './routes/proxy';
 import { loggerMiddleware } from './middleware/logger';
-import { corsWhitelist } from './middleware/cors-whitelist';
 import { securityMiddleware } from './middleware/security';
+import { sriCspMiddleware } from './middleware/sri-csp';
+import { setupPrometheus } from './middleware/prometheus';
+import { limiter } from './middleware/rate-limit';
 
 export function createApp(): Express {
   const app = express();
 
-  // Redis クライアント
-  const redisClient = createClient();
-  redisClient.connect().catch(console.error);
-
   // ミドルウェア
-  app.use(cors(corsWhitelist));
+  app.use(cors());
   app.use(helmet());
   app.use(compression());
   app.use(pinoHttp());
   app.use(loggerMiddleware);
   app.use(securityMiddleware);
-
-  // レート制限
-  const limiter = rateLimit({
-    store: new RedisStore({
-      sendCommand: (...args: string[]) => redisClient.sendCommand(args),
-    }),
-    windowMs: 60 * 1000,
-    max: 60,
-  });
+  app.use(sriCspMiddleware);
   app.use(limiter);
 
   // Prometheus
@@ -45,3 +31,5 @@ export function createApp(): Express {
 
   return app;
 }
+
+export { setupWebSocket };
