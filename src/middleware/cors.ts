@@ -1,9 +1,7 @@
-import { Request, Response, NextFunction } from "express";
+import { CorsOptions } from "cors";
 
-export function corsMiddleware(req: Request, res: Response, next: NextFunction) {
-  const origin = req.headers.origin || "*";
-  res.setHeader("Access-Control-Allow-Origin", origin);
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Range");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  next();
-}
+export const corsOptions: CorsOptions = {
+  origin: ["https://your-allowed-origin.com"],
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+};
