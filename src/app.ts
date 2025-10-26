@@ -1,37 +1,47 @@
-import express from "express";
-import helmet from "helmet";
-import pinoHttp from "pino-http";
-import { register, collectDefaultMetrics } from "prom-client";
-import { createProxyRouter } from "./routes/proxy";
-import { securityMiddleware } from "./middleware/security";
-import { corsMiddleware } from "./middleware/cors";
+import express, { Express } from 'express';
+import cors from 'cors';
+import rateLimit from 'express-rate-limit';
+import RedisStore from 'rate-limit-redis';
+import { createClient } from 'redis';
+import helmet from 'helmet';
+import compression from 'compression';
+import pinoHttp from 'pino-http';
+import { proxyRouter } from './routes/proxy';
+import { setupPrometheus } from './middleware/prometheus';
+import { loggerMiddleware } from './middleware/logger';
+import { corsWhitelist } from './middleware/cors-whitelist';
+import { securityMiddleware } from './middleware/security';
 
-collectDefaultMetrics();
-
-export function createApp() {
+export function createApp(): Express {
   const app = express();
 
-  // セキュリティ設定
+  // Redis クライアント
+  const redisClient = createClient();
+  redisClient.connect().catch(console.error);
+
+  // ミドルウェア
+  app.use(cors(corsWhitelist));
   app.use(helmet());
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
-  app.use(corsMiddleware);
+  app.use(compression());
+  app.use(pinoHttp());
+  app.use(loggerMiddleware);
   app.use(securityMiddleware);
 
-  // ログ設定
-  app.use(pinoHttp({ level: process.env.LOG_LEVEL || "info" }));
-
-  // Prometheus メトリクス
-  app.get("/metrics", async (req, res) => {
-    res.set("Content-Type", register.contentType);
-    res.end(await register.metrics());
+  // レート制限
+  const limiter = rateLimit({
+    store: new RedisStore({
+      sendCommand: (...args: string[]) => redisClient.sendCommand(args),
+    }),
+    windowMs: 60 * 1000,
+    max: 60,
   });
+  app.use(limiter);
 
-  // ルート登録
-  app.use("/proxy", createProxyRouter());
+  // Prometheus
+  setupPrometheus(app);
 
-  // ヘルスチェック
-  app.get("/health", (req, res) => res.json({ status: "ok" }));
+  // ルート
+  app.use('/proxy', proxyRouter);
 
   return app;
 }
