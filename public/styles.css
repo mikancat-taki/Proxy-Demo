@@ -1,0 +1,10 @@
+/* public/styles.css */
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,Arial,Helvetica,sans-serif;background:#0b1020;color:#e6eef8;min-height:100vh}
+.top{display:flex;align-items:center;gap:12px;padding:12px;background:linear-gradient(90deg,#0f1724,#081023);position:sticky;top:0;z-index:50}
+.brand{font-weight:700;font-size:18px}
+#goForm{display:flex;gap:8px;flex:1}
+#goForm input{flex:1;padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);color:inherit}
+#goForm button{padding:8px 12px;border-radius:6px;border:0;background:#3b82f6;color:white;cursor:pointer}
+#frameWrap{height:calc(100vh - 64px);padding:8px}
+iframe#viewer{width:100%;height:100%;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:white}
